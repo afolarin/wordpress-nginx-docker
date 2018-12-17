@@ -52,9 +52,10 @@ If you plan to run your WordPress site over https on port 443, then do the follo
 
     If you plan on using SSL certificates from [Let's Encrypt](https://letsencrypt.org) it is important that your public domain is already DNS registered and publically reachable.
 	
-    Run: `./letsencrypt/letsencrypt-init.sh DOMAIN_NAME`, where `DOMAIN_NAME` is the publicly registered domain name of your host to generate your initial certificate. (Information about updating your Let's Encrypt certificate can be found further down in this document)
+    Run: from the ./letsencrypt/ folder `./letsencrypt-init.sh DOMAIN_NAME`, where `DOMAIN_NAME` is the publicly registered domain name of your host to generate your initial certificate. (Information about updating your Let's Encrypt certificate can be found further down in this document)
 
 ```console
+$ cd ./letsencrypt/
 $ ./letsencrypt-init.sh example.com
 mysql uses an image, skipping
 wordpress uses an image, skipping
@@ -156,10 +157,13 @@ INFO: update the nginx/wordpress_ssl.conf file
 
 **Finally**
 
+**NOTE THE BELOW is setup to use non-root database user (see the .env file and docker-compose.yml** 
+
 1. Change the name of `nginx/wordpress_ssl.conf.example` to `nginx/wordpress_ssl.conf` 
 2. Update the `DOMAIN_NAME` in `nginx/wordpress_ssl.conf` to be that of your domain
-3. Run `$ docker-compose up -d`
-4. Navigate to [https://DOMAIN_NAME]() in a browser where `DOMAIN_NAME` is the name of your site
+3. update the env.template.non-root with the corresponding ENV variables then rename it to .env `$ mv env.template.non-root .env` 
+4. Run `$ docker-compose up -d`
+6. Navigate to [https://DOMAIN_NAME]() in a browser where `DOMAIN_NAME` is the name of your site
 
 ### <a name="renew"></a>Renew your Let's Encrypt certificate
 
