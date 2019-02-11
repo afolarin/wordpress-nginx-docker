@@ -435,3 +435,7 @@ Removing all related directories:
 ```console
 $ rm -rf certs/ certs-data/ logs/ mysql/ wordpress/
 ```
+
+## Firewall Ports
+443 -- https
+80 -- required for certbot renewal (via HTTPS-01)
