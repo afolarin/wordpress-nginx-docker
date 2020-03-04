@@ -5,7 +5,7 @@ This project is a docker compose installation of a single site Wordpress instanc
 - Let's Encrypt SSL enabled option using [https://hub.docker.com/r/certbot/certbot/](https://hub.docker.com/r/certbot/certbot/)
 - Work inspired by: [Dockerizing Wordpress with Nginx and PHP-FPM on Ubuntu 16.04](https://www.howtoforge.com/tutorial/dockerizing-wordpress-with-nginx-and-php-fpm/)
 
-**What is Wordpress?** 
+**What is Wordpress?**
 
 - WordPress is open source software you can use to create a beautiful website, blog, or app.
 - More information at [https://wordpress.org](https://wordpress.org)
@@ -16,9 +16,76 @@ Review the [Optional configuration](#opt_config) section to determine which appl
 
 A [Renew certificate](#renew) section has also been created as a guide of what to expect for post deployment certificate renewal if using Let's Encrypt.
 
-### Create directories on host
+## Guide Steps
+There are 6 steps to deploying this docker Wordpress
+1. Clone the repository
+2. Using the template `env.template.non-root` configure the .env file with your authentication
+3. Create & edit the `wordpress.conf` and  `wordpress_ssl.conf` files
+4. Use `./letsencrypt-init.sh` to build the containers images and setup the required directories  this script also guids you through setting-up the Let's Encrypt certificates
+5. Run the containers (nginx, mysql, wordpress)
+6. setup crontab to renew the certificates etc.
 
-Directories are created on the host to persist data for the containers to volume mount from the host.
+### 1. Clone the repository
+```
+e.g.
+$ git clone git clone https://github.com/afolarin/wordpress-nginx-docker.git
+```
+
+### 2. `.env` file
+It's more convenient to use the `.env` file and passing in the values for the relevant parameters related to database auth and users etc. It is essential you have this setup before building the container images in step `3.` or the correct db users are not setup. In particular set values for `MYSQL_DATABASE_USERNAME`, `MYSQL_DATABASE_PASSWORD`, and `MYSQL_ROOT_DATABASE_PASSWORD`
+
+```sh
+$ cp env.template.non-root .env
+
+$ vi .env
+```
+
+
+```sh
+$ cat .env
+
+#------------------------------------------------------------------------------
+# Docker Compose environment variables file
+#------------------------------------------------------------------------------
+
+# host nginx, and cert mounted volume paths
+# defaults are folders in the top parent directory
+NGINX_PATH="./nginx"
+NGINX_LOG_PATH="./logs/nginx"
+CERTS_PATH="./certs"
+CERTS_DATA_PATH="./certs-data"
+
+# host wordpress web mounted volume path
+WORDPRESS_FILE_PATH="./wordpress"
+
+# database, path, name, authentication and wordpress table prefix (use "wp_")
+MYSQL_PATH="./mysql"
+MYSQL_DATABASE_NAME="wordpress"
+MYSQL_DATABASE_USERNAME=wpuser
+MYSQL_DATABASE_PASSWORD=really-hard-password
+MYSQL_ROOT_DATABASE_PASSWORD=something-secure-password
+WORDPRESS_TABLE_PREFIX="wp_"
+```
+
+see: WordPress environment variables. See the [official image](https://hub.docker.com/_/wordpress/) for additional information.
+
+
+### 3. Create the `wordpress.conf` and  `wordpress_ssl.conf`
+
+Copy the template files `wordpress.conf.example` and  `wordpress_ssl.conf.example` in the `nginx` dir naming as `wordpress.conf` and  `wordpress_ssl.conf` and replace the `DOMAIN_NAME` with your domain name e.g. `example.com`
+
+
+### 4. Run `./letsencrypt-init.sh` on host
+Enter the `letsencrypt/` dir and run the script
+
+```sh
+$ cd letsencrypt/
+$ ./letsencrypt-init.sh example.org
+```
+
+This is the main setup script and does several things:
+
+Firstly directories are created on the host to persist data for the containers to volume mount from the host.
 
 - **mysql**: The database files for MariaDB
 - **wordpress**: The WordPress media files
@@ -26,23 +93,20 @@ Directories are created on the host to persist data for the containers to volume
 - **certs**: SSL certificate files (LetsEncrypt)
 - **certs-data**: SSL challenge/response area (LetsEncrypt)
 
-From the top level of the cloned repository, create the directories that will be used for managing the data on the host.
 
-```
-$ cd wordpress-nginx-docker/
-# mkdir -p certs/ certs-data/ logs/nginx/ mysql/ wordpress/
-```
+Next it will setup the certs depending on what you want HTTP or HTTPS (of which there are a few ways to provide the certificate).
 
-### HTTP
+
+#### HTTP
 
 If you plan to run your WordPress site over http on port 80, then do the following.
 
-1. Change the name of `nginx/wordpress.conf.example` to `nginx/wordpress.conf` 
+1. Change the name of `nginx/wordpress.conf.example` to `nginx/wordpress.conf`
 2. Update the `DOMAIN_NAME` in `nginx/wordpress.conf` to be that of your domain
 3. Run `$ docker-compose up -d`
 4. Navigate to [http://DOMAIN_NAME]() in a browser where `DOMAIN_NAME` is the name of your site
 
-### HTTPS with SSL Certificates
+#### HTTPS with SSL Certificates
 
 If you plan to run your WordPress site over https on port 443, then do the following.
 
@@ -51,7 +115,7 @@ If you plan to run your WordPress site over https on port 443, then do the follo
 - **Let's Encrypt**
 
     If you plan on using SSL certificates from [Let's Encrypt](https://letsencrypt.org) it is important that your public domain is already DNS registered and publically reachable.
-	
+
     Run: from the ./letsencrypt/ folder `./letsencrypt-init.sh DOMAIN_NAME`, where `DOMAIN_NAME` is the publicly registered domain name of your host to generate your initial certificate. (Information about updating your Let's Encrypt certificate can be found further down in this document)
 
 ```console
@@ -129,11 +193,11 @@ INFO: update the nginx/wordpress_ssl.conf file
 - 47:   ssl_certificate_key       /etc/letsencrypt/live/example.com/privkey.pem;
 - 48:   ssl_trusted_certificate   /etc/letsencrypt/live/example.com/chain.pem;
 ```
-	
+
 - **Self signed**
 
 	If you plan on using self signed SSL certificates, run: `./letsencrypt/self-signed-init.sh DOMAIN_NAME`, where `DOMAIN_NAME` is the `CN` you want to assign to the host (commonly `localhost`).
-	
+
 ```console
 $ cd letsencrypt/
 $ ./self-signed-init.sh localhost
@@ -155,17 +219,25 @@ INFO: update the nginx/wordpress_ssl.conf file
 
     If you plan to use pre-existing certificates you will need to update the `nginx/wordpress_ssl.conf` file with the appropriate settings to the kind of certificates you have.
 
-**Finally**
 
-**NOTE THE BELOW is setup to use non-root database user (see the .env file and docker-compose.yml** 
 
-1. Change the name of `nginx/wordpress_ssl.conf.example` to `nginx/wordpress_ssl.conf` 
-2. Update the `DOMAIN_NAME` in `nginx/wordpress_ssl.conf` to be that of your domain
-3. update the env.template.non-root with the corresponding ENV variables then rename it to .env `$ mv env.template.non-root .env` 
-4. Run `$ docker-compose up -d`
-6. Navigate to [https://DOMAIN_NAME]() in a browser where `DOMAIN_NAME` is the name of your site
 
-### <a name="renew"></a>Renew your Let's Encrypt certificate
+### 5. Run the containers (nginx, mysql, wordpress) & configure Wordpress site
+Check the docker-compose configuration is ok and the correct .env variables are substituted
+```sh
+$ docker-compose config
+```
+run the containers
+```sh
+$ docker-compose up -d
+```
+
+Point your browser at your domain `example.com` and you should see the Wordpress setup screen, this will enable you to manually complete the configuration of Wordpress. See example below *"Initial Wordpress setup"* for a brief view of this.
+
+
+
+
+### 6. Renew your Let's Encrypt certificate (automate with crontb)
 
 What is the lifetime for Let’s Encrypt certificates? For how long are they valid?
 
@@ -251,88 +323,21 @@ Congratulations, all renewals succeeded. The following certs have been renewed:
 Killing nginx ... done
 ```
 
-And that's it!
+### crontb renewal example
 
-## <a name="opt_config"></a>Optional Configuration
+```
+# m h  dom mon dow   command
 
-### Environment Varialbles
+##### refresh Let's Encrypt Certs At every 5th minute past hour 0 on day-of-month 1 in every 2nd month. (i.e. ~60 days into the 90 day limit)
+#renew attempt every 1st min of every 14days
+1 * */14 * * cd /home/ubuntu/wordpress-nginx-docker/letsencrypt && bash /home/ubuntu/wordpress-nginx-docker/letsencrypt/letsencrypt-renew.sh >> /home/ubuntu/wordpress-nginx-docker/logs/crontab.cert-renew.log
 
-WordPress environment variables. See the [official image](https://hub.docker.com/_/wordpress/) for additional information.
-
-- `WORDPRESS_DB_NAME`: Name of database used for WordPress in MariaDB
-- `WORDPRESS_TABLE_PREFIX`: Prefix appended to all WordPress related tables in the `WORDPRESS_DB_NAME` database
-- `WORDPRESS_DB_HOST `: Hostname of the database server / container
-- `WORDPRESS_DB_PASSWORD `: Database password for the `WORDPRESS_DB_USER`. By default 'root' is the `WORDPRESS_DB_USER`.
-
-```yaml
-    environment:
-      - WORDPRESS_DB_NAME=wordpress
-      - WORDPRESS_TABLE_PREFIX=wp_
-      - WORDPRESS_DB_HOST=mysql
-      - WORDPRESS_DB_PASSWORD=password
+#restart docker to 5th min of every 14days (seemingly needed for the cert to renew)
+5 * */14 * * sudo docker restart nginx
 ```
 
-MySQL environment variables.
+## Extra bits
 
-- If you've altered the `WORDPRESS_DB_PASSWORD` you should also set the `MYSQL_ROOT_PASSWORD ` to be the same as they will both be associated with the user 'root'.
-
-```yaml
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-```
-
-### Non-root database user
-
-If you don't want 'root' as the `WORDPRESS_DB_USER`, then some extra configuration variables are required in the `mysql` container.
-
-Example:
-
-```yaml
-version: '3.6'
-services:
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
-      - ./logs/nginx:/var/log/nginx
-      - ./wordpress:/var/www/html
-      - ./certs:/etc/letsencrypt
-      - ./certs-data:/data/letsencrypt
-    links:
-      - wordpress
-    restart: always
-
-  mysql:
-    image: mariadb
-    container_name: mysql
-    volumes:
-      - ./mysql:/var/lib/mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_USER=wp_user                 # same as WORDPRESS_DB_USER
-      - MYSQL_PASSWORD=wp_password         # same as WORDPRESS_DB_PASSWORD
-      - MYSQL_DATABASE=wordpress           # same as WORDPRESS_DB_NAME
-    restart: always
-
-  wordpress:
-    image: wordpress:php7.2-fpm
-    container_name: wordpress
-    volumes:
-      - ./wordpress:/var/www/html
-    environment:
-      - WORDPRESS_DB_NAME=wordpress
-      - WORDPRESS_TABLE_PREFIX=wp_
-      - WORDPRESS_DB_HOST=mysql
-      - WORDPRESS_DB_PASSWORD=wp_password  # new DB password
-      - WORDPRESS_DB_USER=wp_user          # new DB user
-    links:
-      - mysql
-    restart: always
-```
 
 ## Example deployment (using localhost)
 
@@ -378,16 +383,16 @@ Navigate your browser to [http://127.0.0.1](http://127.0.0.1) and follow the ins
 3. Success
 
     <img width="80%" alt="Success" src="https://user-images.githubusercontent.com/5332509/44045888-f49b344c-9ef7-11e8-9d65-39517f521d85.png">
-    
+
 4. Log in as the administrative user, dashboard, view site
 
     <img width="80%" alt="First login" src="https://user-images.githubusercontent.com/5332509/44045889-f4a71992-9ef7-11e8-8f5d-8ab16da481c2.png">
-    
+
     <img width="80%" alt="Site dashboard" src="https://user-images.githubusercontent.com/5332509/44045890-f4b4b264-9ef7-11e8-935b-cbc546cd9e00.png">
-    
+
     <img width="80%" alt="View site" src="https://user-images.githubusercontent.com/5332509/44045891-f4c5f90c-9ef7-11e8-88e4-fc8cfb61ea7d.png">
-    
-    
+
+
 Once your site is running you can begin to create and publish any content you'd like in your Wordpress instance.
 
 
